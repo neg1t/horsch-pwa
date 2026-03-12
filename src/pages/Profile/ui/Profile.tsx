@@ -1,10 +1,25 @@
-import { Card, Input, Typography } from 'antd'
+import { Alert, Card, Input, Typography } from 'antd'
+import { useSearchParams } from 'react-router-dom'
 
 import { MobilePage } from 'shared/ui/MobilePage'
 
+import { PushNotificationsCard } from './PushNotificationsCard'
+
 export default function Profile() {
+  const [searchParams] = useSearchParams()
+  const showOpenedFromPush = searchParams.get('source') === 'push'
+  const pushOrderId = searchParams.get('orderId')
+
   return (
     <MobilePage>
+      {showOpenedFromPush ? (
+        <Alert
+          message={`Push deep link received${pushOrderId ? ` for order ${pushOrderId}` : ''}`}
+          showIcon
+          type="success"
+        />
+      ) : null}
+
       <Card className="rounded-[22px] border-[#e7e2dc] shadow-none">
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
@@ -31,6 +46,11 @@ export default function Profile() {
           </div>
         </div>
       </Card>
+
+      <PushNotificationsCard
+        pushOrderId={pushOrderId}
+        showOpenedFromPush={showOpenedFromPush}
+      />
     </MobilePage>
   )
 }

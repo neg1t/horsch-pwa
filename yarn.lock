@@ -6129,6 +6129,11 @@ react-is@^18.2.0:
   resolved "https://registry.yarnpkg.com/react-is/-/react-is-18.2.0.tgz#199431eeaaa2e09f86427efbb4f1473edb47609b"
   integrity sha512-xWGDIW6x921xtzPkhiULtthJHoJvBbF3q26fzloPCK0hsvxtPVelvftw3zjbHWSkR2km9Z+4uxbDDK/6Zw9B8w==
 
+react-onesignal@^3.5.1:
+  version "3.5.1"
+  resolved "https://registry.yarnpkg.com/react-onesignal/-/react-onesignal-3.5.1.tgz#dc9fa59f2e391698f273725a3faf5fdd26dbc33a"
+  integrity sha512-Pd3V/4yOfaD20o2aglJ+ernr9VO7FKNs20LJCmT81pkpkYNn+eCAAdLgLcaGocElLmM8sc9GiM2CCh2FzgYuaw==
+
 react-refresh@^0.14.2:
   version "0.14.2"
   resolved "https://registry.yarnpkg.com/react-refresh/-/react-refresh-0.14.2.tgz#3833da01ce32da470f1f936b9d477da5c7028bf9"

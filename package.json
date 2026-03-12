@@ -28,6 +28,7 @@
     "patronum": "^2.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-onesignal": "^3.5.1",
     "react-router-dom": "^7.1.5",
     "react-transition-group": "^4.4.5"
   },
