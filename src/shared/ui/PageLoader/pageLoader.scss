@@ -1,0 +1,63 @@
+.page-loader {
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  z-index: 99;
+  position: fixed;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background-color: rgba(252, 252, 252, 0.96);
+  backdrop-filter: blur(6px);
+
+  &__logo {
+    overflow: hidden;
+    position: relative;
+
+    img {
+      width: min(240px, 72vw);
+      max-width: 100%;
+    }
+
+    &:after {
+      top: -50px;
+      left: -40px;
+      width: 30px;
+      height: 200px;
+      z-index: 1;
+      content: '';
+      display: block;
+      position: absolute;
+      transform: rotate(45deg);
+      animation: movingFlare 2.5s ease-in-out 0.05s infinite;
+      margin-left: 50px;
+      background: #fff;
+      box-shadow: 4px 1px 51px 22px rgba(255, 255, 255, 1);
+      background: linear-gradient(
+        to bottom,
+        rgba(255, 255, 255, 0.5) 0%,
+        rgba(255, 255, 255, 1) 50%,
+        rgba(255, 255, 255, 0.5) 100%
+      );
+    }
+  }
+
+  @keyframes movingFlare {
+    0% {
+      left: -30px;
+      margin-left: 0px;
+    }
+
+    30% {
+      left: 110%;
+      margin-left: 80px;
+    }
+
+    100% {
+      left: 110%;
+      margin-left: 80px;
+    }
+  }
+}

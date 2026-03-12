@@ -1,0 +1,12 @@
+.error-boundary {
+
+  h2,
+  p {
+    text-align: center;
+  }
+
+  display       : flex;
+  flex-direction: column;
+  margin        : 0 auto;
+  width         : 550px;
+}

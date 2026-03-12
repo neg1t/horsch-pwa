@@ -1,0 +1,46 @@
+$gap-size: 40px;
+
+.b-in-dev {
+  max-width       : 400px;
+  position        : relative;
+  top             : 50px;
+  padding         : 5px 2px;
+  background-color: rgb(255, 249, 77);
+  border-radius   : 10px;
+
+  &__items-wrap {
+    position: relative;
+    display : flex;
+    overflow: hidden;
+    gap     : $gap-size;
+  }
+
+  &__item {
+    flex           : 0 0 auto;
+    display        : flex;
+    justify-content: center;
+    align-items    : center;
+    font-size      : 27px;
+    margin         : 10px 0;
+  }
+
+  &__marquee {
+    animation      : scroll 5s linear infinite;
+    flex-shrink    : 0;
+    display        : flex;
+    gap            : $gap-size;
+    justify-content: space-around;
+    min-width      : 100%;
+  }
+
+}
+
+@keyframes scroll {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(calc(-100% - $gap-size));
+  }
+}
