@@ -43,6 +43,8 @@ export function PushProvider({ children }: PushProviderProps) {
     if (!oneSignalInit) {
       return
     }
+
+    console.log('Subscribing to OneSignal click events', oneSignalInit)
     OneSignal.Notifications.addEventListener('click', (event) => {
       console.log('[push] Received click event', event)
       console.log('push event', event)
@@ -53,6 +55,10 @@ export function PushProvider({ children }: PushProviderProps) {
     return () => {
       OneSignal.Notifications.removeEventListener('click', () => {})
     }
+  }, [oneSignalInit])
+
+  useEffect(() => {
+    console.log('signal init', oneSignalInit)
   }, [oneSignalInit])
 
   // useEffect(() => {
