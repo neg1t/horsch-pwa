@@ -21,8 +21,8 @@ export function PushProvider({ children }: PushProviderProps) {
     let unsubscribed = false
     let unsubscribe = () => undefined
 
-    void ensurePushReady().catch(() => undefined)
-
+    // 1. Subscribe FIRST — registers the click listener on the OneSignal
+    //    facade *before* init(), so replayed pending clicks are caught.
     void subscribeToPushClicks((payload) => {
       console.log('Received push click payload', payload)
       setPayload(payload)
@@ -32,6 +32,8 @@ export function PushProvider({ children }: PushProviderProps) {
     })
       .then((dispose) => {
         unsubscribe = dispose
+        // 2. Now trigger SDK init (idempotent); listener is already in place.
+        return ensurePushReady()
       })
       .catch(() => undefined)
 
@@ -47,9 +49,8 @@ export function PushProvider({ children }: PushProviderProps) {
 
   return (
     <>
-      {children}
-
       {JSON.stringify(payload, null, 2)}
+      {children}
 
       <Modal
         // destroyOnHidden

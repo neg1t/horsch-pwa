@@ -35,6 +35,7 @@ const defaultSnapshot: PushSnapshot = {
   subscriptionId: null,
 }
 
+let modulePromise: Promise<IOneSignalOneSignal> | null = null
 let initPromise: Promise<IOneSignalOneSignal> | null = null
 
 export function getPushConfig(env?: {
@@ -106,7 +107,7 @@ export function parsePushClickPayload(
   }
 }
 
-export async function loadOneSignalClient(): Promise<IOneSignalOneSignal | null> {
+function getOneSignalModule(): Promise<IOneSignalOneSignal> | null {
   if (typeof window === 'undefined') {
     return null
   }
@@ -117,14 +118,34 @@ export async function loadOneSignalClient(): Promise<IOneSignalOneSignal | null>
     return null
   }
 
-  if (!initPromise) {
-    initPromise = import('react-onesignal').then(
-      async ({ default: oneSignal }) => {
-        await oneSignal.init(createOneSignalInitOptions(config.appId))
-
-        return oneSignal
-      },
+  if (!modulePromise) {
+    modulePromise = import('react-onesignal').then(
+      ({ default: oneSignal }) => oneSignal,
     )
+  }
+
+  return modulePromise
+}
+
+export async function loadOneSignalClient(): Promise<IOneSignalOneSignal | null> {
+  const modPromise = getOneSignalModule()
+
+  if (!modPromise) {
+    return null
+  }
+
+  if (!initPromise) {
+    const config = getPushConfig()
+
+    if (!config) {
+      return null
+    }
+
+    initPromise = modPromise.then(async (oneSignal) => {
+      await oneSignal.init(createOneSignalInitOptions(config.appId))
+
+      return oneSignal
+    })
   }
 
   return initPromise
@@ -171,7 +192,8 @@ export async function ensurePushReady() {
 
 export async function subscribeToPushClicks(
   onPayload: (payload: PushClickPayload) => void,
-  loader: () => Promise<IOneSignalOneSignal | null> = loadOneSignalClient,
+  loader: () => Promise<IOneSignalOneSignal | null> = () =>
+    getOneSignalModule() ?? Promise.resolve(null),
 ) {
   const oneSignal = await loader()
 
@@ -187,6 +209,7 @@ export async function subscribeToPushClicks(
     }
   }
 
+  // Register before init() so the listener catches replayed pending clicks
   oneSignal.Notifications.addEventListener('click', listener)
 
   return () => {
