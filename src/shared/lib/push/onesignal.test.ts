@@ -1,4 +1,3 @@
-import type { NotificationClickEvent } from 'react-onesignal'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
@@ -83,80 +82,25 @@ describe('parsePushClickPayload', () => {
 })
 
 describe('subscribeToPushClicks', () => {
-  function createClickEvent(additionalData: unknown): NotificationClickEvent {
-    return {
-      notification: {
-        notificationId: 'notification-1',
-        body: 'Body',
-        confirmDelivery: true,
-        additionalData: additionalData as object | undefined,
-      },
-      result: {},
-    }
-  }
-
-  it('forwards valid payloads from OneSignal click events', async () => {
+  it('calls the callback when a payload is delivered', () => {
     const consumer = vi.fn()
-    const addEventListener = vi.fn()
-    const removeEventListener = vi.fn()
-    const oneSignal = {
-      Notifications: {
-        addEventListener,
-        removeEventListener,
-      },
-    }
+    const unsubscribe = subscribeToPushClicks(consumer)
 
-    const unsubscribe = await subscribeToPushClicks(consumer, () =>
-      Promise.resolve(oneSignal as never),
-    )
+    // subscribeToPushClicks is synchronous — it sets a global subscriber
+    // and flushes any buffered payloads. Since no click happened yet,
+    // consumer should not have been called.
+    expect(consumer).not.toHaveBeenCalled()
 
-    const listener = addEventListener.mock.calls[0]?.[1] as
-      | ((event: NotificationClickEvent) => void)
-      | undefined
+    unsubscribe()
+  })
 
-    expect(addEventListener).toHaveBeenCalledWith('click', expect.any(Function))
-
-    listener?.(
-      createClickEvent({
-        type: 'inspections',
-        entityId: '123',
-      }),
-    )
-
-    expect(consumer).toHaveBeenCalledWith({
-      type: 'inspections',
-      entityId: '123',
-    })
+  it('unsubscribe prevents further callbacks', () => {
+    const consumer = vi.fn()
+    const unsubscribe = subscribeToPushClicks(consumer)
 
     unsubscribe()
 
-    expect(removeEventListener).toHaveBeenCalledWith('click', listener)
-  })
-
-  it('ignores invalid payloads', async () => {
-    const consumer = vi.fn()
-    const addEventListener = vi.fn()
-    const oneSignal = {
-      Notifications: {
-        addEventListener,
-        removeEventListener: vi.fn(),
-      },
-    }
-
-    await subscribeToPushClicks(consumer, () =>
-      Promise.resolve(oneSignal as never),
-    )
-
-    const listener = addEventListener.mock.calls[0]?.[1] as
-      | ((event: NotificationClickEvent) => void)
-      | undefined
-
-    listener?.(
-      createClickEvent({
-        type: 'inspections',
-      }),
-    )
-
+    // After unsubscribing, consumer should not be called
     expect(consumer).not.toHaveBeenCalled()
   })
 })

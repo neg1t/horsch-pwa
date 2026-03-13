@@ -15,27 +15,25 @@ export function PushProvider({ children }: PushProviderProps) {
     null,
   )
 
-  const [payload, setPayload] = useState<PushClickPayload | null>(null)
-
   useEffect(() => {
     let unsubscribed = false
-    let unsubscribe = () => undefined
 
-    // 1. Subscribe FIRST — registers the click listener on the OneSignal
-    //    facade *before* init(), so replayed pending clicks are caught.
-    void subscribeToPushClicks((payload) => {
-      console.log('Received push click payload', payload)
-      setPayload(payload)
+    // subscribeToPushClicks is now synchronous — the underlying click
+    // listener was already pushed into OneSignalDeferred at module-load
+    // time, so it's guaranteed to be in the queue before any init() call.
+    const unsubscribe = subscribeToPushClicks((payload) => {
+      console.log('[push] Received click payload', payload)
       if (!unsubscribed) {
         setActivePayload(payload)
       }
     })
-      .then((dispose) => {
-        unsubscribe = dispose
-        // 2. Now trigger SDK init (idempotent); listener is already in place.
-        return ensurePushReady()
-      })
-      .catch(() => undefined)
+
+    // Trigger SDK initialisation (idempotent). The click listener is
+    // already registered in the deferred queue, so even if init() fires
+    // a replayed click synchronously, it will be caught.
+    void ensurePushReady().catch((err: unknown) =>
+      console.warn('[push] ensurePushReady failed', err),
+    )
 
     return () => {
       unsubscribed = true
@@ -49,7 +47,6 @@ export function PushProvider({ children }: PushProviderProps) {
 
   return (
     <>
-      {JSON.stringify(payload, null, 2)}
       {children}
 
       <Modal

@@ -4,6 +4,7 @@ import { Alert, Button, Card, Input, Select, Space, Typography } from 'antd'
 
 import {
   buildPushDemoUrl,
+  getPushConfig,
   getPushDemoPayload,
   linkPushUser,
   optOutPush,
@@ -14,7 +15,9 @@ import {
 type PushState = Awaited<ReturnType<typeof readPushSnapshot>>
 
 const initialState: PushState = {
-  isConfigured: false,
+  // Use getPushConfig() synchronously so the UI never flashes
+  // the "set env variable" warning when the config IS present.
+  isConfigured: getPushConfig() !== null,
   isSupported: false,
   permission: 'unknown',
   optedIn: false,

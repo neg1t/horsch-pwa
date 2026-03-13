@@ -190,30 +190,67 @@ export async function ensurePushReady() {
   return readPushSnapshot()
 }
 
-export async function subscribeToPushClicks(
-  onPayload: (payload: PushClickPayload) => void,
-  loader: () => Promise<IOneSignalOneSignal | null> = () =>
-    getOneSignalModule() ?? Promise.resolve(null),
-) {
-  const oneSignal = await loader()
+// ── Early click buffer ──────────────────────────────────────
+// We push a callback into window.OneSignalDeferred *synchronously*
+// (no async import needed). The Web SDK drains the deferred queue
+// in insertion order, so as long as this runs before init(), our
+// listener is guaranteed to be registered on the SDK before pending
+// click events are replayed.
 
-  if (!oneSignal) {
-    return () => undefined
+type ClickCallback = (payload: PushClickPayload) => void
+
+const earlyClickBuffer: PushClickPayload[] = []
+let clickSubscriber: ClickCallback | null = null
+let earlyListenerInstalled = false
+
+function installEarlyClickListener() {
+  if (earlyListenerInstalled) return
+  if (typeof window === 'undefined') return
+  if (!getPushConfig()) return
+
+  earlyListenerInstalled = true
+
+  // Ensure the deferred array exists (react-onesignal creates it on import,
+  // but we may run before that import).
+  window.OneSignalDeferred = window.OneSignalDeferred || []
+
+  window.OneSignalDeferred.push((oneSignal) => {
+    oneSignal.Notifications.addEventListener(
+      'click',
+      (event: NotificationClickEvent) => {
+        console.log('[push] click event from SDK', event)
+
+        const payload = parsePushClickPayload(event.notification.additionalData)
+
+        if (!payload) return
+
+        if (clickSubscriber) {
+          clickSubscriber(payload)
+        } else {
+          // No subscriber yet — buffer for later delivery
+          earlyClickBuffer.push(payload)
+        }
+      },
+    )
+  })
+}
+
+// Install as early as possible (module evaluation time).
+installEarlyClickListener()
+
+export function subscribeToPushClicks(onPayload: ClickCallback): () => void {
+  clickSubscriber = onPayload
+
+  // Flush anything that arrived before the subscriber was attached
+  while (earlyClickBuffer.length > 0) {
+    const buffered = earlyClickBuffer.shift()
+    if (buffered) onPayload(buffered)
   }
-
-  const listener = (event: NotificationClickEvent) => {
-    const payload = parsePushClickPayload(event.notification.additionalData)
-
-    if (payload) {
-      onPayload(payload)
-    }
-  }
-
-  // Register before init() so the listener catches replayed pending clicks
-  oneSignal.Notifications.addEventListener('click', listener)
 
   return () => {
-    oneSignal.Notifications.removeEventListener('click', listener)
+    if (clickSubscriber === onPayload) {
+      clickSubscriber = null
+    }
   }
 }
 

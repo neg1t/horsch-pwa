@@ -74,7 +74,7 @@ describe('PushProvider', () => {
     pushMocks.subscribeToPushClicks.mockImplementation((listener) => {
       clickListener = listener
 
-      return Promise.resolve(vi.fn())
+      return vi.fn()
     })
   })
 
