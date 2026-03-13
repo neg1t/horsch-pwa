@@ -26,7 +26,7 @@ export function PushProvider({ children }: PushProviderProps) {
         appId: ONESIGNAL_APP_ID,
         allowLocalhostAsSecureOrigin: true,
         autoRegister: false,
-        notificationClickHandlerAction: 'navigate',
+        notificationClickHandlerAction: 'focus',
         notificationClickHandlerMatch: 'origin',
         persistNotification: true,
         serviceWorkerPath: '/OneSignalSDKWorker.js',
