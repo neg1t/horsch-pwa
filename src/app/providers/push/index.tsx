@@ -15,6 +15,8 @@ export function PushProvider({ children }: PushProviderProps) {
     null,
   )
 
+  const [payload, setPayload] = useState<PushClickPayload | null>(null)
+
   useEffect(() => {
     let unsubscribed = false
     let unsubscribe = () => undefined
@@ -22,6 +24,8 @@ export function PushProvider({ children }: PushProviderProps) {
     void ensurePushReady().catch(() => undefined)
 
     void subscribeToPushClicks((payload) => {
+      console.log('Received push click payload', payload)
+      setPayload(payload)
       if (!unsubscribed) {
         setActivePayload(payload)
       }
@@ -44,6 +48,8 @@ export function PushProvider({ children }: PushProviderProps) {
   return (
     <>
       {children}
+
+      {JSON.stringify(payload, null, 2)}
 
       <Modal
         // destroyOnHidden
