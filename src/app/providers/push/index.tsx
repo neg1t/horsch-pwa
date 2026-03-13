@@ -17,6 +17,8 @@ export function PushProvider({ children }: PushProviderProps) {
     null,
   )
 
+  const [oneSignalInit, setOneSignalInit] = useState(false)
+
   // init one signal
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -33,11 +35,14 @@ export function PushProvider({ children }: PushProviderProps) {
           disable: true,
           message: '',
         },
-      })
+      }).then(() => setOneSignalInit(true))
     }
   }, [])
 
   useEffect(() => {
+    if (!oneSignalInit) {
+      return
+    }
     OneSignal.Notifications.addEventListener('click', (event) => {
       console.log('[push] Received click event', event)
       console.log('push event', event)
@@ -48,7 +53,7 @@ export function PushProvider({ children }: PushProviderProps) {
     return () => {
       OneSignal.Notifications.removeEventListener('click', () => {})
     }
-  }, [])
+  }, [oneSignalInit])
 
   // useEffect(() => {
   //   let unsubscribed = false
