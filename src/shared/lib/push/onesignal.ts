@@ -17,6 +17,8 @@ export type PushClickPayload = {
   entityId: string
 }
 
+export const PUSH_PAYLOAD_SEARCH_PARAM = 'pushPayload'
+
 export type PushSnapshot = {
   isConfigured: boolean
   isSupported: boolean
@@ -107,6 +109,58 @@ export function parsePushClickPayload(
     type: payload.type,
     entityId: payload.entityId,
   }
+}
+
+function extractPushClickPayload(candidate: unknown): PushClickPayload | null {
+  const payload = parsePushClickPayload(candidate)
+
+  if (payload) {
+    return payload
+  }
+
+  if (!candidate || typeof candidate !== 'object') {
+    return null
+  }
+
+  const nested = candidate as {
+    additionalData?: unknown
+    custom?: unknown
+    data?: unknown
+  }
+
+  return (
+    parsePushClickPayload(nested.additionalData) ??
+    parsePushClickPayload(nested.data) ??
+    extractPushClickPayload(nested.custom) ??
+    null
+  )
+}
+
+export function parsePushClickPayloadFromSearch(
+  search: string,
+): PushClickPayload | null {
+  const params = new URLSearchParams(search)
+  const rawPayload = params.get(PUSH_PAYLOAD_SEARCH_PARAM)
+
+  if (!rawPayload) {
+    return null
+  }
+
+  try {
+    return parsePushClickPayload(JSON.parse(rawPayload))
+  } catch {
+    return null
+  }
+}
+
+export function stripPushClickPayloadFromSearch(search: string): string {
+  const params = new URLSearchParams(search)
+
+  params.delete(PUSH_PAYLOAD_SEARCH_PARAM)
+
+  const nextSearch = params.toString()
+
+  return nextSearch.length > 0 ? `?${nextSearch}` : ''
 }
 
 function getOneSignalModule(): Promise<IOneSignalOneSignal> | null {
@@ -201,14 +255,15 @@ function handlePushNotification(
 ) {
   console.log(`[push] ${source} notification`, notification)
   console.log(`[push] ${source} additionalData`, notification.additionalData)
+  console.log(
+    `[push] ${source} data`,
+    (notification as IOSNotification & { data?: unknown }).data,
+  )
 
-  const payload = parsePushClickPayload(notification.additionalData)
+  const payload = extractPushClickPayload(notification)
 
   if (!payload) {
-    console.log(
-      `[push] ${source} payload rejected`,
-      notification.additionalData,
-    )
+    console.log(`[push] ${source} payload rejected`, notification)
 
     return false
   }
@@ -232,15 +287,11 @@ export async function subscribeToPushPayloads(
   const foregroundListener = (
     event: NotificationForegroundWillDisplayEvent,
   ) => {
-    const handled = handlePushNotification(
+    handlePushNotification(
       'foregroundWillDisplay',
       event.notification,
       onPayload,
     )
-
-    if (handled) {
-      event.preventDefault()
-    }
   }
 
   const clickListener = (event: NotificationClickEvent) => {

@@ -5,14 +5,37 @@ import { Modal, Typography } from 'antd'
 import {
   type PushClickPayload,
   ensurePushReady,
+  parsePushClickPayload,
+  parsePushClickPayloadFromSearch,
+  stripPushClickPayloadFromSearch,
   subscribeToPushPayloads,
 } from 'shared/lib/push'
 
 type PushProviderProps = PropsWithChildren
+const oneSignalNotificationClickMessageType = 'onesignal-notification-click'
+
+function readStartupPayload(): PushClickPayload | null {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  const payload = parsePushClickPayloadFromSearch(window.location.search)
+
+  if (!payload) {
+    return null
+  }
+
+  const nextSearch = stripPushClickPayloadFromSearch(window.location.search)
+  const nextUrl = `${window.location.pathname}${nextSearch}${window.location.hash}`
+
+  window.history.replaceState(window.history.state, '', nextUrl)
+
+  return payload
+}
 
 export function PushProvider({ children }: PushProviderProps) {
   const [activePayload, setActivePayload] = useState<PushClickPayload | null>(
-    null,
+    () => readStartupPayload(),
   )
 
   useEffect(() => {
@@ -46,6 +69,38 @@ export function PushProvider({ children }: PushProviderProps) {
     return () => {
       unsubscribed = true
       unsubscribe()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (
+      typeof navigator === 'undefined' ||
+      typeof navigator.serviceWorker?.addEventListener !== 'function'
+    ) {
+      return
+    }
+
+    const handleMessage = (event: MessageEvent<unknown>) => {
+      const payload = parsePushClickPayload(
+        (event.data as { payload?: unknown; type?: unknown })?.payload,
+      )
+
+      if (
+        !payload ||
+        (event.data as { type?: unknown } | null)?.type !==
+          oneSignalNotificationClickMessageType
+      ) {
+        return
+      }
+
+      console.log('[push] received payload from service worker', payload)
+      setActivePayload(payload)
+    }
+
+    navigator.serviceWorker.addEventListener('message', handleMessage)
+
+    return () => {
+      navigator.serviceWorker.removeEventListener('message', handleMessage)
     }
   }, [])
 

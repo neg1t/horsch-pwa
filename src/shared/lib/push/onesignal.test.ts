@@ -5,9 +5,11 @@ import type {
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  PUSH_PAYLOAD_SEARCH_PARAM,
   createOneSignalInitOptions,
   getPushConfig,
   parsePushClickPayload,
+  parsePushClickPayloadFromSearch,
   subscribeToPushPayloads,
 } from './onesignal'
 
@@ -103,7 +105,7 @@ describe('subscribeToPushPayloads', () => {
     return addEventListener.mock.calls.find(([name]) => name === eventName)?.[1]
   }
 
-  it('forwards valid payloads from foreground notifications and prevents default', async () => {
+  it('forwards valid payloads from foreground notifications without suppressing display', async () => {
     const consumer = vi.fn()
     const addEventListener = vi.fn()
     const removeEventListener = vi.fn()
@@ -136,7 +138,7 @@ describe('subscribeToPushPayloads', () => {
       type: 'inspections',
       entityId: '123',
     })
-    expect(preventDefault).toHaveBeenCalled()
+    expect(preventDefault).not.toHaveBeenCalled()
 
     unsubscribe()
 
@@ -212,5 +214,58 @@ describe('subscribeToPushPayloads', () => {
     unsubscribe()
 
     expect(removeEventListener).toHaveBeenCalledWith('click', clickListener)
+  })
+
+  it('forwards valid payloads from click notifications when payload is stored on notification.data', async () => {
+    const consumer = vi.fn()
+    const addEventListener = vi.fn()
+    const oneSignal = {
+      Notifications: {
+        addEventListener,
+        removeEventListener: vi.fn(),
+      },
+    }
+
+    await subscribeToPushPayloads(consumer, () =>
+      Promise.resolve(oneSignal as never),
+    )
+
+    const clickListener = findListener(addEventListener, 'click') as
+      | ((event: NotificationClickEvent) => void)
+      | undefined
+
+    clickListener?.({
+      notification: {
+        ...createNotification(undefined),
+        data: {
+          type: 'inspections',
+          entityId: '123',
+        },
+      } as NotificationClickEvent['notification'],
+      result: {},
+    })
+
+    expect(consumer).toHaveBeenCalledWith({
+      type: 'inspections',
+      entityId: '123',
+    })
+  })
+})
+
+describe('parsePushClickPayloadFromSearch', () => {
+  it('returns payload from the configured search param', () => {
+    const params = new URLSearchParams()
+    params.set(
+      PUSH_PAYLOAD_SEARCH_PARAM,
+      JSON.stringify({
+        type: 'inspections',
+        entityId: '123',
+      }),
+    )
+
+    expect(parsePushClickPayloadFromSearch(`?${params.toString()}`)).toEqual({
+      type: 'inspections',
+      entityId: '123',
+    })
   })
 })

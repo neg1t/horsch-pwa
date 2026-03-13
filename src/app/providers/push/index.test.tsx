@@ -11,6 +11,8 @@ type PushClickPayload = {
   entityId: string
 }
 
+const pushPayloadSearchParam = 'pushPayload'
+
 const pushMocks = vi.hoisted(() => {
   return {
     ensurePushReady: vi.fn(),
@@ -18,8 +20,11 @@ const pushMocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('shared/lib/push', () => {
+vi.mock('shared/lib/push', async () => {
+  const actual = await vi.importActual('shared/lib/push')
+
   return {
+    ...actual,
     ensurePushReady: pushMocks.ensurePushReady,
     subscribeToPushPayloads: pushMocks.subscribeToPushPayloads,
   }
@@ -59,6 +64,7 @@ describe('PushProvider', () => {
   let container: HTMLDivElement
   let root: ReturnType<typeof createRoot>
   let payloadListener: ((payload: PushClickPayload) => void) | null
+  let serviceWorker: EventTarget
 
   beforeEach(() => {
     ;(
@@ -69,6 +75,12 @@ describe('PushProvider', () => {
     document.body.appendChild(container)
     root = createRoot(container)
     payloadListener = null
+    serviceWorker = new EventTarget()
+    window.history.replaceState({}, '', '/')
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: serviceWorker,
+    })
 
     pushMocks.ensurePushReady.mockResolvedValue(undefined)
     pushMocks.subscribeToPushPayloads.mockImplementation((listener) => {
@@ -84,6 +96,7 @@ describe('PushProvider', () => {
     })
 
     container.remove()
+    window.history.replaceState({}, '', '/')
     vi.clearAllMocks()
   })
 
@@ -133,5 +146,58 @@ describe('PushProvider', () => {
 
     expect(container.textContent).not.toContain('inspections')
     expect(container.textContent).not.toContain('123')
+  })
+
+  it('opens a modal from push payload stored in the URL and clears the one-shot param', async () => {
+    const params = new URLSearchParams()
+    params.set(
+      pushPayloadSearchParam,
+      JSON.stringify({
+        type: 'inspections',
+        entityId: '123',
+      }),
+    )
+    window.history.replaceState({}, '', `/?${params.toString()}`)
+
+    await act(async () => {
+      root.render(
+        <PushProvider>
+          <div>app</div>
+        </PushProvider>,
+      )
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('inspections')
+    expect(container.textContent).toContain('123')
+    expect(window.location.search).toBe('')
+  })
+
+  it('opens a modal from the service worker click bridge', async () => {
+    await act(async () => {
+      root.render(
+        <PushProvider>
+          <div>app</div>
+        </PushProvider>,
+      )
+      await Promise.resolve()
+    })
+
+    act(() => {
+      serviceWorker.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'onesignal-notification-click',
+            payload: {
+              type: 'inspections',
+              entityId: '123',
+            },
+          },
+        }),
+      )
+    })
+
+    expect(container.textContent).toContain('inspections')
+    expect(container.textContent).toContain('123')
   })
 })
