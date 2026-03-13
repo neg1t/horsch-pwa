@@ -1,7 +1,9 @@
 import { type PropsWithChildren, useEffect, useState } from 'react'
 
 import { Modal, Typography } from 'antd'
+import OneSignal from 'react-onesignal'
 
+import { ONESIGNAL_APP_ID } from 'shared/config'
 import {
   type PushClickPayload,
   ensurePushReady,
@@ -15,31 +17,64 @@ export function PushProvider({ children }: PushProviderProps) {
     null,
   )
 
+  // init one signal
   useEffect(() => {
-    let unsubscribed = false
-
-    // subscribeToPushClicks is now synchronous — the underlying click
-    // listener was already pushed into OneSignalDeferred at module-load
-    // time, so it's guaranteed to be in the queue before any init() call.
-    const unsubscribe = subscribeToPushClicks((payload) => {
-      console.log('[push] Received click payload', payload)
-      if (!unsubscribed) {
-        setActivePayload(payload)
-      }
-    })
-
-    // Trigger SDK initialisation (idempotent). The click listener is
-    // already registered in the deferred queue, so even if init() fires
-    // a replayed click synchronously, it will be caught.
-    void ensurePushReady().catch((err: unknown) =>
-      console.warn('[push] ensurePushReady failed', err),
-    )
-
-    return () => {
-      unsubscribed = true
-      unsubscribe()
+    if (typeof window !== 'undefined') {
+      void OneSignal.init({
+        appId: ONESIGNAL_APP_ID,
+        allowLocalhostAsSecureOrigin: true,
+        autoRegister: false,
+        notificationClickHandlerAction: 'navigate',
+        notificationClickHandlerMatch: 'origin',
+        persistNotification: true,
+        serviceWorkerPath: '/OneSignalSDKWorker.js',
+        serviceWorkerUpdaterPath: '/OneSignalSDKUpdaterWorker.js',
+        welcomeNotification: {
+          disable: true,
+          message: '',
+        },
+      })
     }
   }, [])
+
+  useEffect(() => {
+    OneSignal.Notifications.addEventListener('click', (event) => {
+      console.log('[push] Received click event', event)
+      console.log('push event', event)
+      const payload = event.notification.additionalData as PushClickPayload
+      setActivePayload(payload)
+    })
+
+    return () => {
+      OneSignal.Notifications.removeEventListener('click', () => {})
+    }
+  }, [])
+
+  // useEffect(() => {
+  //   let unsubscribed = false
+
+  //   // subscribeToPushClicks is now synchronous — the underlying click
+  //   // listener was already pushed into OneSignalDeferred at module-load
+  //   // time, so it's guaranteed to be in the queue before any init() call.
+  //   const unsubscribe = subscribeToPushClicks((payload) => {
+  //     console.log('[push] Received click payload', payload)
+  //     if (!unsubscribed) {
+  //       setActivePayload(payload)
+  //     }
+  //   })
+
+  //   // Trigger SDK initialisation (idempotent). The click listener is
+  //   // already registered in the deferred queue, so even if init() fires
+  //   // a replayed click synchronously, it will be caught.
+  //   void ensurePushReady().catch((err: unknown) =>
+  //     console.warn('[push] ensurePushReady failed', err),
+  //   )
+
+  //   return () => {
+  //     unsubscribed = true
+  //     unsubscribe()
+  //   }
+  // }, [])
 
   function handleClose() {
     setActivePayload(null)

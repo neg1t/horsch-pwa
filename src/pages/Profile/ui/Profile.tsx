@@ -34,7 +34,7 @@ export default function Profile() {
         </div>
       </Card>
 
-      <PushNotificationsCard />
+      {/* <PushNotificationsCard /> */}
     </MobilePage>
   )
 }
