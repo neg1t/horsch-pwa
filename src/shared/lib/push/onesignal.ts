@@ -1,9 +1,18 @@
-import type { IInitObject, IOneSignalOneSignal } from 'react-onesignal'
+import type {
+  IInitObject,
+  IOneSignalOneSignal,
+  NotificationClickEvent,
+} from 'react-onesignal'
 
 import { AppRoutes, ONESIGNAL_APP_ID } from 'shared/config'
 
 export type PushConfig = {
   appId: string
+}
+
+export type PushClickPayload = {
+  type: string
+  entityId: string
 }
 
 export type PushSnapshot = {
@@ -28,8 +37,10 @@ const defaultSnapshot: PushSnapshot = {
 
 let initPromise: Promise<IOneSignalOneSignal> | null = null
 
-export function getPushConfig(): PushConfig | null {
-  const appId = ONESIGNAL_APP_ID?.trim()
+export function getPushConfig(env?: {
+  VITE_ONESIGNAL_APP_ID?: string | null
+}): PushConfig | null {
+  const appId = (env?.VITE_ONESIGNAL_APP_ID ?? ONESIGNAL_APP_ID)?.trim()
 
   if (!appId) {
     return null
@@ -58,10 +69,41 @@ export function createOneSignalInitOptions(appId: string): IInitObject {
 export function buildPushDemoUrl(origin: string): string {
   const url = new URL(AppRoutes.Profile.path, origin)
 
-  url.searchParams.set('source', 'push')
-  url.searchParams.set('orderId', '42')
-
   return url.toString()
+}
+
+export function getPushDemoPayload(): PushClickPayload {
+  return {
+    type: 'inspections',
+    entityId: '42',
+  }
+}
+
+export function parsePushClickPayload(
+  additionalData: unknown,
+): PushClickPayload | null {
+  if (!additionalData || typeof additionalData !== 'object') {
+    return null
+  }
+
+  const payload = additionalData as {
+    entityId?: unknown
+    type?: unknown
+  }
+
+  if (
+    typeof payload.type !== 'string' ||
+    payload.type.length === 0 ||
+    typeof payload.entityId !== 'string' ||
+    payload.entityId.length === 0
+  ) {
+    return null
+  }
+
+  return {
+    type: payload.type,
+    entityId: payload.entityId,
+  }
 }
 
 export async function loadOneSignalClient(): Promise<IOneSignalOneSignal | null> {
@@ -103,6 +145,52 @@ export async function readPushSnapshot(): Promise<PushSnapshot> {
     externalId: oneSignal.User.externalId ?? null,
     onesignalId: oneSignal.User.onesignalId ?? null,
     subscriptionId: oneSignal.User.PushSubscription.id ?? null,
+  }
+}
+
+export async function ensurePushReady() {
+  const oneSignal = await loadOneSignalClient()
+
+  if (!oneSignal) {
+    return defaultSnapshot
+  }
+
+  const isSupported = oneSignal.Notifications.isPushSupported()
+  const permission = oneSignal.Notifications.permissionNative
+
+  if (
+    isSupported &&
+    permission === 'granted' &&
+    !oneSignal.User.PushSubscription.optedIn
+  ) {
+    await oneSignal.User.PushSubscription.optIn()
+  }
+
+  return readPushSnapshot()
+}
+
+export async function subscribeToPushClicks(
+  onPayload: (payload: PushClickPayload) => void,
+  loader: () => Promise<IOneSignalOneSignal | null> = loadOneSignalClient,
+) {
+  const oneSignal = await loader()
+
+  if (!oneSignal) {
+    return () => undefined
+  }
+
+  const listener = (event: NotificationClickEvent) => {
+    const payload = parsePushClickPayload(event.notification.additionalData)
+
+    if (payload) {
+      onPayload(payload)
+    }
+  }
+
+  oneSignal.Notifications.addEventListener('click', listener)
+
+  return () => {
+    oneSignal.Notifications.removeEventListener('click', listener)
   }
 }
 

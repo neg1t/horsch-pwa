@@ -4,16 +4,12 @@ import { Alert, Button, Card, Input, Select, Space, Typography } from 'antd'
 
 import {
   buildPushDemoUrl,
+  getPushDemoPayload,
   linkPushUser,
   optOutPush,
   readPushSnapshot,
   requestPushPermission,
 } from 'shared/lib/push'
-
-type PushNotificationsCardProps = {
-  showOpenedFromPush: boolean
-  pushOrderId: string | null
-}
 
 type PushState = Awaited<ReturnType<typeof readPushSnapshot>>
 
@@ -27,16 +23,14 @@ const initialState: PushState = {
   subscriptionId: null,
 }
 
-export function PushNotificationsCard({
-  showOpenedFromPush,
-  pushOrderId,
-}: PushNotificationsCardProps) {
+export function PushNotificationsCard() {
   const [state, setState] = useState<PushState>(initialState)
   const [externalId, setExternalId] = useState('field-user-1')
   const [role, setRole] = useState('field-worker')
   const [busy, setBusy] = useState(false)
   const [errorText, setErrorText] = useState<string | null>(null)
   const [demoUrl, setDemoUrl] = useState('')
+  const [demoPayload, setDemoPayload] = useState('')
 
   useEffect(() => {
     let active = true
@@ -51,6 +45,7 @@ export function PushNotificationsCard({
 
     if (typeof window !== 'undefined') {
       setDemoUrl(buildPushDemoUrl(window.location.origin))
+      setDemoPayload(JSON.stringify(getPushDemoPayload()))
     }
 
     void refresh()
@@ -88,14 +83,6 @@ export function PushNotificationsCard({
             request notification permission manually.
           </Typography.Text>
         </div>
-
-        {showOpenedFromPush ? (
-          <Alert
-            message={`Opened from push${pushOrderId ? `: order ${pushOrderId}` : ''}`}
-            showIcon
-            type="success"
-          />
-        ) : null}
 
         {!state.isConfigured ? (
           <Alert
@@ -185,11 +172,18 @@ export function PushNotificationsCard({
 
         <div className="flex flex-col gap-1">
           <Typography.Text className="text-[14px] font-semibold text-[#171411]">
-            Deep link for push click test
+            Launch URL for push click test
+          </Typography.Text>
+          <Input readOnly value={demoUrl || '/profile'} />
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <Typography.Text className="text-[14px] font-semibold text-[#171411]">
+            additionalData payload example
           </Typography.Text>
           <Input
             readOnly
-            value={demoUrl || '/profile?source=push&orderId=42'}
+            value={demoPayload || '{"type":"inspections","entityId":"42"}'}
           />
         </div>
       </div>

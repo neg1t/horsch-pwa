@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import type { NotificationClickEvent } from 'react-onesignal'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
-  buildPushDemoUrl,
   createOneSignalInitOptions,
   getPushConfig,
+  parsePushClickPayload,
+  subscribeToPushClicks,
 } from './onesignal'
 
 describe('getPushConfig', () => {
@@ -41,10 +43,120 @@ describe('createOneSignalInitOptions', () => {
   })
 })
 
-describe('buildPushDemoUrl', () => {
-  it('creates a profile deep link with push metadata', () => {
-    expect(buildPushDemoUrl('https://demo.horsch.local')).toBe(
-      'https://demo.horsch.local/profile?source=push&orderId=42',
+describe('parsePushClickPayload', () => {
+  it('returns payload when type and entityId are present', () => {
+    expect(
+      parsePushClickPayload({
+        type: 'inspections',
+        entityId: '123',
+      }),
+    ).toEqual({
+      type: 'inspections',
+      entityId: '123',
+    })
+  })
+
+  it('returns null when type is missing', () => {
+    expect(
+      parsePushClickPayload({
+        entityId: '123',
+      }),
+    ).toBeNull()
+  })
+
+  it('returns null when entityId is missing', () => {
+    expect(
+      parsePushClickPayload({
+        type: 'inspections',
+      }),
+    ).toBeNull()
+  })
+
+  it('returns null when payload fields are not strings', () => {
+    expect(
+      parsePushClickPayload({
+        type: 'inspections',
+        entityId: 123,
+      }),
+    ).toBeNull()
+  })
+})
+
+describe('subscribeToPushClicks', () => {
+  function createClickEvent(additionalData: unknown): NotificationClickEvent {
+    return {
+      notification: {
+        notificationId: 'notification-1',
+        body: 'Body',
+        confirmDelivery: true,
+        additionalData: additionalData as object | undefined,
+      },
+      result: {},
+    }
+  }
+
+  it('forwards valid payloads from OneSignal click events', async () => {
+    const consumer = vi.fn()
+    const addEventListener = vi.fn()
+    const removeEventListener = vi.fn()
+    const oneSignal = {
+      Notifications: {
+        addEventListener,
+        removeEventListener,
+      },
+    }
+
+    const unsubscribe = await subscribeToPushClicks(consumer, () =>
+      Promise.resolve(oneSignal as never),
     )
+
+    const listener = addEventListener.mock.calls[0]?.[1] as
+      | ((event: NotificationClickEvent) => void)
+      | undefined
+
+    expect(addEventListener).toHaveBeenCalledWith('click', expect.any(Function))
+
+    listener?.(
+      createClickEvent({
+        type: 'inspections',
+        entityId: '123',
+      }),
+    )
+
+    expect(consumer).toHaveBeenCalledWith({
+      type: 'inspections',
+      entityId: '123',
+    })
+
+    unsubscribe()
+
+    expect(removeEventListener).toHaveBeenCalledWith('click', listener)
+  })
+
+  it('ignores invalid payloads', async () => {
+    const consumer = vi.fn()
+    const addEventListener = vi.fn()
+    const oneSignal = {
+      Notifications: {
+        addEventListener,
+        removeEventListener: vi.fn(),
+      },
+    }
+
+    await subscribeToPushClicks(consumer, () =>
+      Promise.resolve(oneSignal as never),
+    )
+
+    const listener = addEventListener.mock.calls[0]?.[1] as
+      | ((event: NotificationClickEvent) => void)
+      | undefined
+
+    listener?.(
+      createClickEvent({
+        type: 'inspections',
+      }),
+    )
+
+    expect(consumer).not.toHaveBeenCalled()
   })
 })

@@ -6,6 +6,7 @@ import { RouterEffects } from 'shared/lib/router-effects'
 
 import './init'
 import { ErrorBoundaryRedirect } from './providers/error-boundary'
+import { PushProvider } from './providers/push'
 import { ThemeProvider } from './providers/theme'
 import { Router } from './router'
 import './styles'
@@ -18,11 +19,13 @@ export const App = ({ scope }: AppProps) => {
     <Provider value={scope}>
       <ThemeProvider>
         <BrowserRouter>
-          <RouterEffects>
-            <ErrorBoundaryRedirect>
-              <Router />
-            </ErrorBoundaryRedirect>
-          </RouterEffects>
+          <PushProvider>
+            <RouterEffects>
+              <ErrorBoundaryRedirect>
+                <Router />
+              </ErrorBoundaryRedirect>
+            </RouterEffects>
+          </PushProvider>
         </BrowserRouter>
       </ThemeProvider>
     </Provider>
