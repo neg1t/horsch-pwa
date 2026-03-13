@@ -1,10 +1,14 @@
+import type {
+  NotificationClickEvent,
+  NotificationForegroundWillDisplayEvent,
+} from 'react-onesignal'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
   createOneSignalInitOptions,
   getPushConfig,
   parsePushClickPayload,
-  subscribeToPushClicks,
+  subscribeToPushPayloads,
 } from './onesignal'
 
 describe('getPushConfig', () => {
@@ -81,26 +85,132 @@ describe('parsePushClickPayload', () => {
   })
 })
 
-describe('subscribeToPushClicks', () => {
-  it('calls the callback when a payload is delivered', () => {
-    const consumer = vi.fn()
-    const unsubscribe = subscribeToPushClicks(consumer)
+describe('subscribeToPushPayloads', () => {
+  function createNotification(additionalData: unknown) {
+    return {
+      notificationId: 'notification-1',
+      body: 'Body',
+      confirmDelivery: true,
+      additionalData: additionalData as object | undefined,
+      display: vi.fn(),
+    }
+  }
 
-    // subscribeToPushClicks is synchronous — it sets a global subscriber
-    // and flushes any buffered payloads. Since no click happened yet,
-    // consumer should not have been called.
-    expect(consumer).not.toHaveBeenCalled()
+  function findListener(
+    addEventListener: ReturnType<typeof vi.fn>,
+    eventName: 'click' | 'foregroundWillDisplay',
+  ) {
+    return addEventListener.mock.calls.find(([name]) => name === eventName)?.[1]
+  }
+
+  it('forwards valid payloads from foreground notifications and prevents default', async () => {
+    const consumer = vi.fn()
+    const addEventListener = vi.fn()
+    const removeEventListener = vi.fn()
+    const oneSignal = {
+      Notifications: {
+        addEventListener,
+        removeEventListener,
+      },
+    }
+
+    const unsubscribe = await subscribeToPushPayloads(consumer, () =>
+      Promise.resolve(oneSignal as never),
+    )
+
+    const preventDefault = vi.fn()
+    const foregroundListener = findListener(
+      addEventListener,
+      'foregroundWillDisplay',
+    ) as ((event: NotificationForegroundWillDisplayEvent) => void) | undefined
+
+    foregroundListener?.({
+      notification: createNotification({
+        type: 'inspections',
+        entityId: '123',
+      }),
+      preventDefault,
+    })
+
+    expect(consumer).toHaveBeenCalledWith({
+      type: 'inspections',
+      entityId: '123',
+    })
+    expect(preventDefault).toHaveBeenCalled()
 
     unsubscribe()
+
+    expect(removeEventListener).toHaveBeenCalledWith(
+      'foregroundWillDisplay',
+      foregroundListener,
+    )
   })
 
-  it('unsubscribe prevents further callbacks', () => {
+  it('ignores invalid foreground payloads and does not prevent default', async () => {
     const consumer = vi.fn()
-    const unsubscribe = subscribeToPushClicks(consumer)
+    const addEventListener = vi.fn()
+    const oneSignal = {
+      Notifications: {
+        addEventListener,
+        removeEventListener: vi.fn(),
+      },
+    }
+
+    await subscribeToPushPayloads(consumer, () =>
+      Promise.resolve(oneSignal as never),
+    )
+
+    const preventDefault = vi.fn()
+    const foregroundListener = findListener(
+      addEventListener,
+      'foregroundWillDisplay',
+    ) as ((event: NotificationForegroundWillDisplayEvent) => void) | undefined
+
+    foregroundListener?.({
+      notification: createNotification({
+        type: 'inspections',
+      }),
+      preventDefault,
+    })
+
+    expect(consumer).not.toHaveBeenCalled()
+    expect(preventDefault).not.toHaveBeenCalled()
+  })
+
+  it('forwards valid payloads from click notifications', async () => {
+    const consumer = vi.fn()
+    const addEventListener = vi.fn()
+    const removeEventListener = vi.fn()
+    const oneSignal = {
+      Notifications: {
+        addEventListener,
+        removeEventListener,
+      },
+    }
+
+    const unsubscribe = await subscribeToPushPayloads(consumer, () =>
+      Promise.resolve(oneSignal as never),
+    )
+
+    const clickListener = findListener(addEventListener, 'click') as
+      | ((event: NotificationClickEvent) => void)
+      | undefined
+
+    clickListener?.({
+      notification: createNotification({
+        type: 'inspections',
+        entityId: '123',
+      }),
+      result: {},
+    })
+
+    expect(consumer).toHaveBeenCalledWith({
+      type: 'inspections',
+      entityId: '123',
+    })
 
     unsubscribe()
 
-    // After unsubscribing, consumer should not be called
-    expect(consumer).not.toHaveBeenCalled()
+    expect(removeEventListener).toHaveBeenCalledWith('click', clickListener)
   })
 })

@@ -1,7 +1,9 @@
 import type {
   IInitObject,
+  IOSNotification,
   IOneSignalOneSignal,
   NotificationClickEvent,
+  NotificationForegroundWillDisplayEvent,
 } from 'react-onesignal'
 
 import { AppRoutes, ONESIGNAL_APP_ID } from 'shared/config'
@@ -112,9 +114,7 @@ function getOneSignalModule(): Promise<IOneSignalOneSignal> | null {
     return null
   }
 
-  const config = getPushConfig()
-
-  if (!config) {
+  if (!getPushConfig()) {
     return null
   }
 
@@ -187,70 +187,78 @@ export async function ensurePushReady() {
     await oneSignal.User.PushSubscription.optIn()
   }
 
-  return readPushSnapshot()
+  const snapshot = await readPushSnapshot()
+
+  console.log('[push] init ready', snapshot)
+
+  return snapshot
 }
 
-// ── Early click buffer ──────────────────────────────────────
-// We push a callback into window.OneSignalDeferred *synchronously*
-// (no async import needed). The Web SDK drains the deferred queue
-// in insertion order, so as long as this runs before init(), our
-// listener is guaranteed to be registered on the SDK before pending
-// click events are replayed.
+function handlePushNotification(
+  source: 'click' | 'foregroundWillDisplay',
+  notification: IOSNotification,
+  onPayload: (payload: PushClickPayload) => void,
+) {
+  console.log(`[push] ${source} notification`, notification)
+  console.log(`[push] ${source} additionalData`, notification.additionalData)
 
-type ClickCallback = (payload: PushClickPayload) => void
+  const payload = parsePushClickPayload(notification.additionalData)
 
-const earlyClickBuffer: PushClickPayload[] = []
-let clickSubscriber: ClickCallback | null = null
-let earlyListenerInstalled = false
-
-function installEarlyClickListener() {
-  if (earlyListenerInstalled) return
-  if (typeof window === 'undefined') return
-  if (!getPushConfig()) return
-
-  earlyListenerInstalled = true
-
-  // Ensure the deferred array exists (react-onesignal creates it on import,
-  // but we may run before that import).
-  window.OneSignalDeferred = window.OneSignalDeferred || []
-
-  window.OneSignalDeferred.push((oneSignal) => {
-    oneSignal.Notifications.addEventListener(
-      'click',
-      (event: NotificationClickEvent) => {
-        console.log('[push] click event from SDK', event)
-
-        const payload = parsePushClickPayload(event.notification.additionalData)
-
-        if (!payload) return
-
-        if (clickSubscriber) {
-          clickSubscriber(payload)
-        } else {
-          // No subscriber yet — buffer for later delivery
-          earlyClickBuffer.push(payload)
-        }
-      },
+  if (!payload) {
+    console.log(
+      `[push] ${source} payload rejected`,
+      notification.additionalData,
     )
-  })
-}
 
-// Install as early as possible (module evaluation time).
-installEarlyClickListener()
-
-export function subscribeToPushClicks(onPayload: ClickCallback): () => void {
-  clickSubscriber = onPayload
-
-  // Flush anything that arrived before the subscriber was attached
-  while (earlyClickBuffer.length > 0) {
-    const buffered = earlyClickBuffer.shift()
-    if (buffered) onPayload(buffered)
+    return false
   }
 
-  return () => {
-    if (clickSubscriber === onPayload) {
-      clickSubscriber = null
+  console.log(`[push] ${source} payload accepted`, payload)
+  onPayload(payload)
+
+  return true
+}
+
+export async function subscribeToPushPayloads(
+  onPayload: (payload: PushClickPayload) => void,
+  loader: () => Promise<IOneSignalOneSignal | null> = loadOneSignalClient,
+) {
+  const oneSignal = await loader()
+
+  if (!oneSignal) {
+    return () => undefined
+  }
+
+  const foregroundListener = (
+    event: NotificationForegroundWillDisplayEvent,
+  ) => {
+    const handled = handlePushNotification(
+      'foregroundWillDisplay',
+      event.notification,
+      onPayload,
+    )
+
+    if (handled) {
+      event.preventDefault()
     }
+  }
+
+  const clickListener = (event: NotificationClickEvent) => {
+    handlePushNotification('click', event.notification, onPayload)
+  }
+
+  oneSignal.Notifications.addEventListener(
+    'foregroundWillDisplay',
+    foregroundListener,
+  )
+  oneSignal.Notifications.addEventListener('click', clickListener)
+
+  return () => {
+    oneSignal.Notifications.removeEventListener(
+      'foregroundWillDisplay',
+      foregroundListener,
+    )
+    oneSignal.Notifications.removeEventListener('click', clickListener)
   }
 }
 

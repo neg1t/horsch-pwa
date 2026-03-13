@@ -14,14 +14,14 @@ type PushClickPayload = {
 const pushMocks = vi.hoisted(() => {
   return {
     ensurePushReady: vi.fn(),
-    subscribeToPushClicks: vi.fn(),
+    subscribeToPushPayloads: vi.fn(),
   }
 })
 
 vi.mock('shared/lib/push', () => {
   return {
     ensurePushReady: pushMocks.ensurePushReady,
-    subscribeToPushClicks: pushMocks.subscribeToPushClicks,
+    subscribeToPushPayloads: pushMocks.subscribeToPushPayloads,
   }
 })
 
@@ -58,7 +58,7 @@ vi.mock('antd', () => {
 describe('PushProvider', () => {
   let container: HTMLDivElement
   let root: ReturnType<typeof createRoot>
-  let clickListener: ((payload: PushClickPayload) => void) | null
+  let payloadListener: ((payload: PushClickPayload) => void) | null
 
   beforeEach(() => {
     ;(
@@ -68,13 +68,13 @@ describe('PushProvider', () => {
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
-    clickListener = null
+    payloadListener = null
 
     pushMocks.ensurePushReady.mockResolvedValue(undefined)
-    pushMocks.subscribeToPushClicks.mockImplementation((listener) => {
-      clickListener = listener
+    pushMocks.subscribeToPushPayloads.mockImplementation((listener) => {
+      payloadListener = listener
 
-      return vi.fn()
+      return Promise.resolve(vi.fn())
     })
   })
 
@@ -87,17 +87,18 @@ describe('PushProvider', () => {
     vi.clearAllMocks()
   })
 
-  it('opens a modal after a valid push click payload', () => {
-    act(() => {
+  it('opens a modal after a valid push payload', async () => {
+    await act(async () => {
       root.render(
         <PushProvider>
           <div>app</div>
         </PushProvider>,
       )
+      await Promise.resolve()
     })
 
     act(() => {
-      clickListener?.({
+      payloadListener?.({
         type: 'inspections',
         entityId: '123',
       })
@@ -107,17 +108,18 @@ describe('PushProvider', () => {
     expect(container.textContent).toContain('123')
   })
 
-  it('closes the modal when dismissed', () => {
-    act(() => {
+  it('closes the modal when dismissed', async () => {
+    await act(async () => {
       root.render(
         <PushProvider>
           <div>app</div>
         </PushProvider>,
       )
+      await Promise.resolve()
     })
 
     act(() => {
-      clickListener?.({
+      payloadListener?.({
         type: 'inspections',
         entityId: '123',
       })

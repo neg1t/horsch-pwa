@@ -1,13 +1,11 @@
 import { type PropsWithChildren, useEffect, useState } from 'react'
 
 import { Modal, Typography } from 'antd'
-import OneSignal from 'react-onesignal'
 
-import { ONESIGNAL_APP_ID } from 'shared/config'
 import {
   type PushClickPayload,
   ensurePushReady,
-  subscribeToPushClicks,
+  subscribeToPushPayloads,
 } from 'shared/lib/push'
 
 type PushProviderProps = PropsWithChildren
@@ -17,75 +15,39 @@ export function PushProvider({ children }: PushProviderProps) {
     null,
   )
 
-  const [oneSignalInit, setOneSignalInit] = useState(false)
-
-  // init one signal
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      void OneSignal.init({
-        appId: ONESIGNAL_APP_ID,
-        allowLocalhostAsSecureOrigin: true,
-        autoRegister: false,
-        notificationClickHandlerAction: 'focus',
-        notificationClickHandlerMatch: 'origin',
-        persistNotification: true,
-        serviceWorkerPath: '/OneSignalSDKWorker.js',
-        serviceWorkerUpdaterPath: '/OneSignalSDKUpdaterWorker.js',
-        welcomeNotification: {
-          disable: true,
-          message: '',
-        },
-      }).then(() => setOneSignalInit(true))
-    }
-  }, [])
+    let unsubscribed = false
+    let unsubscribe = () => undefined
 
-  useEffect(() => {
-    if (!oneSignalInit) {
-      return
-    }
+    void subscribeToPushPayloads((payload) => {
+      console.log('[push] received payload', payload)
 
-    console.log('Subscribing to OneSignal click events', oneSignalInit)
-    OneSignal.Notifications.addEventListener('click', (event) => {
-      console.log('[push] Received click event', event)
-      console.log('push event', event)
-      const payload = event.notification.additionalData as PushClickPayload
-      setActivePayload(payload)
+      if (!unsubscribed) {
+        setActivePayload(payload)
+      }
     })
+      .then((dispose) => {
+        if (unsubscribed) {
+          dispose()
+
+          return
+        }
+
+        unsubscribe = dispose
+      })
+      .catch((err: unknown) =>
+        console.warn('[push] subscribeToPushPayloads failed', err),
+      )
+
+    void ensurePushReady().catch((err: unknown) =>
+      console.warn('[push] ensurePushReady failed', err),
+    )
 
     return () => {
-      OneSignal.Notifications.removeEventListener('click', () => {})
+      unsubscribed = true
+      unsubscribe()
     }
-  }, [oneSignalInit])
-
-  useEffect(() => {
-    console.log('signal init', oneSignalInit)
-  }, [oneSignalInit])
-
-  // useEffect(() => {
-  //   let unsubscribed = false
-
-  //   // subscribeToPushClicks is now synchronous — the underlying click
-  //   // listener was already pushed into OneSignalDeferred at module-load
-  //   // time, so it's guaranteed to be in the queue before any init() call.
-  //   const unsubscribe = subscribeToPushClicks((payload) => {
-  //     console.log('[push] Received click payload', payload)
-  //     if (!unsubscribed) {
-  //       setActivePayload(payload)
-  //     }
-  //   })
-
-  //   // Trigger SDK initialisation (idempotent). The click listener is
-  //   // already registered in the deferred queue, so even if init() fires
-  //   // a replayed click synchronously, it will be caught.
-  //   void ensurePushReady().catch((err: unknown) =>
-  //     console.warn('[push] ensurePushReady failed', err),
-  //   )
-
-  //   return () => {
-  //     unsubscribed = true
-  //     unsubscribe()
-  //   }
-  // }, [])
+  }, [])
 
   function handleClose() {
     setActivePayload(null)
@@ -96,8 +58,7 @@ export function PushProvider({ children }: PushProviderProps) {
       {children}
 
       <Modal
-        // destroyOnHidden
-
+        destroyOnHidden
         footer={null}
         onCancel={handleClose}
         onOk={handleClose}

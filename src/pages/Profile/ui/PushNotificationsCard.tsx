@@ -182,7 +182,7 @@ export function PushNotificationsCard() {
 
         <div className="flex flex-col gap-1">
           <Typography.Text className="text-[14px] font-semibold text-[#171411]">
-            additionalData payload example
+            OneSignal data payload example
           </Typography.Text>
           <Input
             readOnly
