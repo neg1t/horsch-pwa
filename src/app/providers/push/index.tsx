@@ -58,7 +58,6 @@ export function PushProvider({ children }: PushProviderProps) {
       {children}
 
       <Modal
-        destroyOnHidden
         footer={null}
         onCancel={handleClose}
         onOk={handleClose}
